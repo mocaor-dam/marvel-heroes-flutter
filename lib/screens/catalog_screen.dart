@@ -24,14 +24,47 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
   Future<void> _changeFavorite(HeroItem hero) async {
     // R4: añadir sin duplicados; antes de quitar, pedir confirmación.
+    final isFavorite = _favorites.contains(hero.id);
+    if(!isFavorite){
+      setState(() {
+        _favorites.add(hero.id);
+      });
+      return;
+    }
+
     final t = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.pending)));
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.confirmTitle),
+        content: Text(t.confirmMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false), // Cancelar -> devuelve false
+            child: Text(t.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),  // Quitar -> devuelve true
+            child: Text(t.remove),
+          ),
+        ],
+      ),
+    );
+
+
+    if (confirm == true && mounted) {
+      setState(() {
+        _favorites.remove(hero.id);
+      });
+    }
   }
   Future<void> _open(HeroItem hero) async {
     final changed = await Navigator.push<bool>(context, MaterialPageRoute(
       builder: (_) => DetailScreen(hero: hero, favorite: _favorites.contains(hero.id))));
     if (!mounted || changed != true) return;
     // R3: aplicar la intención devuelta por el detalle.
+    _changeFavorite(hero);
   }
   @override
   Widget build(BuildContext context) {
@@ -59,15 +92,29 @@ class _CatalogScreenState extends State<CatalogScreen> {
               // Android puede anunciar ancho cero durante el primer fotograma.
               if (constraints.maxWidth <= 16) return const SizedBox.shrink();
               // R5: una columna <600; dos >=600 píxeles lógicos.
-              final columns = 1;
-              return SingleChildScrollView(key: const ValueKey('catalog-scroll'),
-                padding: const EdgeInsets.all(8), child: Wrap(children: [
-                  for (final hero in shown)
-                    SizedBox(width: (constraints.maxWidth - 16) / columns,
-                      child: HeroCard(hero: hero, favorite: _favorites.contains(hero.id),
-                        onOpen: () => _open(hero), onFavorite: () => _changeFavorite(hero))),
-                ]));
-            })),
+              final columns = constraints.maxWidth >= 600 ? 2 : 1;
+
+
+              return SingleChildScrollView(
+                key: const ValueKey('catalog-scroll'),
+                padding: const EdgeInsets.all(8),
+                child: Wrap(
+                  children: [
+                    for (final hero in shown)
+                      SizedBox(
+                        width: (constraints.maxWidth - 16) / columns,
+                        child: HeroCard(
+                          hero: hero,
+                          favorite: _favorites.contains(hero.id),
+                          onOpen: () => _open(hero),
+                          onFavorite: () => _changeFavorite(hero),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+        })
+        )
       ])),
       bottomNavigationBar: NavigationBar(selectedIndex: _destination,
         onDestinationSelected: (value) => setState(() => _destination = value),
